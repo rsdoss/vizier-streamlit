@@ -1,56 +1,59 @@
 import streamlit as st
 from openai import OpenAI
+import pandas as pd  # For handling CSV files if needed
 
 # Show title and description.
-st.title("💬 Chatbot")
+st.title("💬 Vizier")
 st.write(
-    "This is a simple chatbot that uses OpenAI's GPT-3.5 model to generate responses. "
-    "To use this app, you need to provide an OpenAI API key, which you can get [here](https://platform.openai.com/account/api-keys). "
-    "You can also learn how to build this app step by step by [following our tutorial](https://docs.streamlit.io/develop/tutorials/llms/build-conversational-apps)."
+    "This chatbot uses OpenAI's GPT-3.5 model to analyze documents and answer questions. "
+    "Upload a document and ask questions about its contents. "
 )
 
-# Ask user for their OpenAI API key via `st.text_input`.
-# Alternatively, you can store the API key in `./.streamlit/secrets.toml` and access it
-# via `st.secrets`, see https://docs.streamlit.io/develop/concepts/connections/secrets-management
-openai_api_key = st.text_input("OpenAI API Key", type="password")
-if not openai_api_key:
-    st.info("Please add your OpenAI API key to continue.", icon="🗝️")
-else:
+# Initialize OpenAI client
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-    # Create an OpenAI client.
-    client = OpenAI(api_key=openai_api_key)
+# Initialize session state for messages if not already present
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+    # Add initial system message
+    st.session_state.messages.append({
+        "role": "system",
+        "content": "You are a helpful AI assistant. When provided with documents, you will analyze them and answer questions about their content."
+    })
 
-    # Create a session state variable to store the chat messages. This ensures that the
-    # messages persist across reruns.
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-
-    # Display the existing chat messages via `st.chat_message`.
-    for message in st.session_state.messages:
+# Display existing chat messages
+for message in st.session_state.messages:
+    if message["role"] != "system":  # Don't display system messages
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # Create a chat input field to allow the user to enter a message. This will display
-    # automatically at the bottom of the page.
-    if prompt := st.chat_input("What is up?"):
+# File upload widget in sidebar
+with st.sidebar:
+    uploaded_file = st.file_uploader("Upload a document to analyze (optional)", type=["txt", "pdf"])
 
-        # Store and display the current prompt.
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
-
-        # Generate a response using the OpenAI API.
+# Chat input
+if prompt := st.chat_input("Ask a question"):
+    # Get document content if file is uploaded
+    document_content = None
+    if uploaded_file:
+        document_content = uploaded_file.getvalue().decode()
+        
+    # Create user message with document context if available
+    user_message = prompt
+    if document_content:
+        user_message = f"Document content:\n{document_content}\n\nQuestion: {prompt}"
+    
+    # Add user message to chat history and display
+    st.session_state.messages.append({"role": "user", "content": user_message})
+    with st.chat_message("user"):
+        st.markdown(prompt)  # Show only the question, not the document content
+        
+    # Generate assistant response
+    with st.chat_message("assistant"):
         stream = client.chat.completions.create(
             model="gpt-3.5-turbo",
-            messages=[
-                {"role": m["role"], "content": m["content"]}
-                for m in st.session_state.messages
-            ],
-            stream=True,
+            messages=st.session_state.messages,
+            stream=True
         )
-
-        # Stream the response to the chat using `st.write_stream`, then store it in 
-        # session state.
-        with st.chat_message("assistant"):
-            response = st.write_stream(stream)
+        response = st.write_stream(stream)
         st.session_state.messages.append({"role": "assistant", "content": response})
