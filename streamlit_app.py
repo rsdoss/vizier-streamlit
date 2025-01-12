@@ -1,6 +1,7 @@
 import streamlit as st
 from openai import OpenAI
 import pandas as pd  # For handling CSV files if needed
+from qdrant_client import QdrantClient
 
 # Show title and description.
 st.title("💬 Vizier")
@@ -11,6 +12,9 @@ st.write(
 
 # Initialize OpenAI client
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+
+# Initialize Qdrant client
+qdrant_client = QdrantClient(api_key=st.secrets["QDRANT_API_KEY"], host=st.secrets["QDRANT_HOST"])
 
 # Initialize session state for messages if not already present
 if "messages" not in st.session_state:
